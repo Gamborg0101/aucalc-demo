@@ -114,3 +114,13 @@ To run the app with working citation links, put the original files in `rules/` a
 `public/kilder/`, using the filenames referenced by `DocumentRef.file` in the config. Both
 locations are git-ignored for PDFs/spreadsheets. Without them, the calculator works fully; only the
 "download source" links on citations return 404.
+
+## How it was built
+
+Built for the research consultants at the Faculty of Arts, Aarhus University, as part of my job there. This repo is a portfolio copy, so the development history isn't visible.
+
+**My part:** I researched the domain (AU's working-time agreement, buy-out policy, rate catalogues and overhead rules) and wrote the rules down in `rules/NOTES-*.md`. Before building, I sent open questions to the consultants for confirmation (`docs/open-questions.md`). I defined the requirements and product decisions, directed the work, reviewed the code and verified the results. After deployment I ran six rounds of feedback with the consultants.
+
+**AI's part:** Most of the code was written with Claude Code, using `CLAUDE.md` and the rule notes as context.
+
+**Verification:** 169 tests, including golden fixtures that reproduce every worked example in the source documents, property-based round-trip tests, and guardrails that throw on invalid states.
