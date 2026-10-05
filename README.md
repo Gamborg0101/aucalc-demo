@@ -84,6 +84,9 @@ Deployed on Vercel, with Postgres on Neon (EU region). Environment variable chan
 redeploy to take effect; migrations run against the direct (non-pooled) connection string, the
 app itself against the pooled one.
 
+Setting `DEMO_MODE=1` turns a deployment into a public portfolio demo: `/` becomes a landing page
+with a "Try the calculator" button, nothing is behind a login, and the account pages are disabled.
+
 ## Running locally
 
 ```bash

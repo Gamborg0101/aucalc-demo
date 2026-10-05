@@ -5,6 +5,7 @@
  */
 import type { ReactNode } from 'react';
 import type { DocumentRef } from '@/lib/frikoeb';
+import { DEMO_MODE } from '@/lib/demo';
 
 /**
  * `collapsible` puts `children` (the table/detail content) behind a closed-by-default
@@ -59,10 +60,11 @@ function documentHref(file: string): string {
  * `public/kilder/`) get linked. A few `DocumentRef`s point their `file` at our
  * own internal `NOTES-*.md` write-up instead — used when the real primary
  * source is a web page with nothing to literally download — and those stay
- * plain text rather than exposing an internal analysis file.
+ * plain text rather than exposing an internal analysis file. The public demo
+ * ships without the documents (AU material), so nothing is linked there.
  */
 function isDownloadable(file: string): boolean {
-  return /\.(pdf|xlsm)$/i.test(file);
+  return !DEMO_MODE && /\.(pdf|xlsm)$/i.test(file);
 }
 
 /**

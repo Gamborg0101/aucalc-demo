@@ -1,4 +1,6 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { DEMO_MODE } from '@/lib/demo';
 import { PasswordField } from '../_components/PasswordField';
 import { ThemeToggle } from '../_components/ThemeToggle';
 import { login } from './actions';
@@ -6,6 +8,7 @@ import { login } from './actions';
 export const metadata = { title: 'Log ind — Frikøbsberegner' };
 
 export default async function LoginPage(props: PageProps<'/login'>) {
+  if (DEMO_MODE) redirect('/');
   const { error, callbackUrl } = await props.searchParams;
 
   return (

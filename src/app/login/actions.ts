@@ -5,11 +5,13 @@ import { redirect } from 'next/navigation';
 import { compare, hash } from 'bcryptjs';
 import { Prisma } from '@/generated/prisma/client';
 import { ACCESS_COOKIE, issueAccessToken, parseAccessToken } from '@/lib/access';
+import { DEMO_MODE } from '@/lib/demo';
 import { prisma } from '@/lib/prisma';
 
 const ONE_MONTH_SECONDS = 60 * 60 * 24 * 30;
 
 export async function login(formData: FormData): Promise<void> {
+  if (DEMO_MODE) redirect('/');
   const username = formData.get('username');
   const password = formData.get('password');
   const rawCallbackUrl = formData.get('callbackUrl');
@@ -55,6 +57,7 @@ export async function logout(): Promise<void> {
 }
 
 export async function signup(formData: FormData): Promise<void> {
+  if (DEMO_MODE) redirect('/');
   const username = formData.get('username');
   const name = formData.get('name');
   const password = formData.get('password');
@@ -104,6 +107,7 @@ export async function signup(formData: FormData): Promise<void> {
 }
 
 export async function changePassword(formData: FormData): Promise<void> {
+  if (DEMO_MODE) redirect('/');
   const session = parseAccessToken((await cookies()).get(ACCESS_COOKIE)?.value);
   if (!session) redirect('/login');
 
@@ -128,6 +132,7 @@ export async function changePassword(formData: FormData): Promise<void> {
 }
 
 export async function deleteAccount(formData: FormData): Promise<void> {
+  if (DEMO_MODE) redirect('/');
   const session = parseAccessToken((await cookies()).get(ACCESS_COOKIE)?.value);
   if (!session) redirect('/login');
 

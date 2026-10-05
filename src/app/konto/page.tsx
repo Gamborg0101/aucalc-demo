@@ -1,12 +1,14 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ACCESS_COOKIE, parseAccessToken } from '@/lib/access';
+import { DEMO_MODE } from '@/lib/demo';
 import { PasswordField } from '../_components/PasswordField';
 import { changePassword, deleteAccount } from '../login/actions';
 
 export const metadata = { title: 'Konto — Frikøbsberegner' };
 
 export default async function KontoPage(props: PageProps<'/konto'>) {
+  if (DEMO_MODE) redirect('/beregner');
   const { error, success, deleteError } = await props.searchParams;
   const session = parseAccessToken((await cookies()).get(ACCESS_COOKIE)?.value);
   if (!session) redirect('/login?callbackUrl=%2Fkonto');

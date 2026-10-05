@@ -1,4 +1,6 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { DEMO_MODE } from '@/lib/demo';
 import { PasswordField } from '../_components/PasswordField';
 import { ThemeToggle } from '../_components/ThemeToggle';
 import { signup } from '../login/actions';
@@ -6,6 +8,7 @@ import { signup } from '../login/actions';
 export const metadata = { title: 'Opret konto — Frikøbsberegner' };
 
 export default async function SignupPage(props: PageProps<'/signup'>) {
+  if (DEMO_MODE) redirect('/');
   const { error } = await props.searchParams;
 
   return (

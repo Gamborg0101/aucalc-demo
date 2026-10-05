@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { ACCESS_COOKIE, parseAccessToken } from "@/lib/access";
+import { DEMO_MODE } from "@/lib/demo";
 import { Nav } from "./_components/Nav";
 import { Footer } from "./_components/Footer";
 import "./globals.css";
@@ -52,11 +53,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         >
           Spring til indhold
         </a>
-        {session && <Nav userName={session.name} />}
+        {DEMO_MODE ? <Nav /> : session && <Nav userName={session.name} />}
         <main id="main-content" className="flex-1">
           {children}
         </main>
-        <Footer />
+        <Footer demo={DEMO_MODE} />
       </body>
     </html>
   );
