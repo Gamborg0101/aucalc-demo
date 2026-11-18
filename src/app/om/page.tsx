@@ -26,10 +26,6 @@ const KILDEGRUPPER: { label: string; description: string }[] = [
     description: 'Procesdokument, historiske formler, takstkataloget for 2024/25/26, beregnede kostpriser 2025–2032.',
   },
   {
-    label: 'Indtægtsdækket virksomhed',
-    description: 'Overheadsats 2026/27, vejledning, miniguide, priskalkulationsskema, AU Ceteras prisliste.',
-  },
-  {
     label: 'Løn',
     description: 'Arts’ lønaftale af 17. september 2025.',
   },
@@ -47,7 +43,10 @@ export default function OmPage() {
 
       <Section title="Om beregneren">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          Et frikøb kan beregnes begge veje — fra bevilling til måneder og timer, eller omvendt.
+          En frikøbsberegner for Faculty of Arts, bygget på ARTS&rsquo; frikøbsnotat. Fonden betaler
+          fuld kostpris; af arbejdstiden registreres 60% i Vipomatic, mens de 40% forskningstid ikke
+          registreres nogen steder. Et frikøb kan beregnes begge veje — fra bevilling til måneder og
+          timer, eller omvendt.
           Beregneren viser en citeret, trin-for-trin udregning, som en konsulent kan sætte ind i et
           projektbudget og forsvare over for en bevillingsgiver.
         </p>

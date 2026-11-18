@@ -24,7 +24,7 @@ const HIGHLIGHTS: { title: string; body: string }[] = [
   },
   {
     title: 'Verified against the source documents',
-    body: '169 tests, including golden fixtures that reproduce every worked example in the university’s own documents exactly — rounding direction included — plus property-based round-trip tests.',
+    body: '151 tests, including golden fixtures that reproduce every worked example in the university’s own documents exactly — rounding direction included — plus property-based round-trip tests.',
   },
 ];
 

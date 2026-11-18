@@ -1,14 +1,14 @@
 # Status — resume here
 
-Last updated: 2026-09-23. This is the project's working log, kept as-is in the public snapshot.
+Last updated: 2026-10-27. This is the project's working log, kept as-is in the public snapshot.
 
 ## Starting on a new machine
 
 ```bash
-git clone https://github.com/Gamborg0101/frikoeb-calculator.git
-cd frikoeb-calculator
+git clone https://github.com/Gamborg0101/aucalc-demo.git
+cd aucalc-demo
 npm install         # runs `prisma generate` via postinstall
-npm test            # expect 169 passing
+npm test            # expect 151 passing
 npm run dev          # http://localhost:3000 now redirects to /login — see "Auth" below
 ```
 
@@ -24,6 +24,16 @@ account with `npx tsx scripts/create-user.ts <username> <name> <password>`. See 
 
 ## Done
 
+### 2026-10-27 — R36: Frikøb Standard only, pricing stack removed
+After practitioner input (anonymised) showed the calculator was wrong, the frikøbstype is fixed to
+**Frikøb Standard** (full kostpris, `variant: 'fuldt'`). The 60%-priced default (R26) had made
+210.000 kr buy 5 md instead of 3. The pricing stack (overhead, margin, moms, market floor) and its
+UI are removed, as are arbejdsdage and the 70.000 kr suggestion. New starting point: **Samlet
+arbejdstid**, so 100 t shows directly as 60 t Vipomatic + 40 t forskning. The same round added
+per-semester credit: `solve()` returns `semesters`, shown in a "Fordeling på semestre" card and
+trace step. 151 tests pass. Sections below that describe R26, pricing, overhead or IDV are
+historical.
+
 ### Research — complete
 Every domain question answered from primary AU sources. `docs/open-questions.md` has the full
 resolved list. Three items (overhead rate 105/113/116%, the undervisningsfrikøb coefficient, and
@@ -35,7 +45,7 @@ numerically matches the standard model, R20) and **confirmed Vipomatic's own wor
 (7,24 t — R24, now wired into the engine as `workDays`). Nothing blocks building or using the tool, and
 past calculation examples are on their way from the consultant for cross-checking against the tool.
 
-### Logic layer — complete, 169 tests passing
+### Logic layer — complete, 151 tests passing
 
 Everything under `src/lib/frikoeb/` — units, rounding, the derivation trace, the bidirectional
 solver, the full cost stack (overhead/margin/moms with per-mechanism bases), multi-year
@@ -475,7 +485,7 @@ public-sector launch.
 ## Handy commands
 
 ```bash
-npm test                 # 169 tests
+npm test                 # 151 tests
 npm run lint && npm run typecheck
 npx tsx --eval "import {solve} from './src/lib/frikoeb/solve';import {traceToMarkdown} from './src/lib/frikoeb/trace';console.log(traceToMarkdown(solve({asOf:'2026-01-01',category:'lektor',variant:'fuldt',monthlyCostKr:70000,solveFor:'months',given:{moneyKr:210000}}).trace))"
 

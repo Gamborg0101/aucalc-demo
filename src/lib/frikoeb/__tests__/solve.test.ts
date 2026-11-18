@@ -190,6 +190,77 @@ describe('units in the derivation must be correct', () => {
   });
 });
 
+describe('Frikøb Standard — the ARTS frikøbsnotat 60/40 split', () => {
+  it('100 hours of work time: 60 registered in Vipomatic, 40 research registered nowhere', () => {
+    const r = solve({ ...base, given: { workHours: 100 } });
+    expect(r.hours.workHours).toBe(100);
+    expect(r.hours.hoursToRegisterWhole).toBe(60);
+    expect(r.hours.researchHours).toBe(40);
+  });
+
+  it('one month reproduces the notat: 137,5 × 0,6 = 82,5 timer', () => {
+    const r = solve({ ...base, solveFor: 'money', given: { months: 1 } });
+    expect(r.hours.workHours).toBe(137.5);
+    expect(r.hours.hoursToRegister).toBe(82.5);
+  });
+
+  it.each([
+    ['lektor', 6, 495],
+    ['adjunkt', 1, 82.5],
+    ['professor', 4, 330],
+  ] as const)('the notat\'s own example: %s, %i md → %d t i Vipomatic', (category, months, hours) => {
+    const r = solve({ ...base, category, solveFor: 'money', given: { months } });
+    expect(r.hours.hoursToRegister).toBe(hours);
+    expect(r.hours.hoursToRegisterWhole).toBe(Math.floor(hours));
+  });
+
+  it('a krone buys a full kostpris month: 210.000 kr at 70.000 kr/md = 3 md', () => {
+    const r = solve({ ...base, monthlyCostKr: 70_000, given: { moneyKr: 210_000 } });
+    expect(r.months).toBe(3);
+  });
+
+  it('work hours and registered hours agree on months', () => {
+    const fromWork = solve({ ...base, given: { workHours: 825 } });
+    const fromReg = solve({ ...base, given: { hoursRegistered: 495 } });
+    expect(fromWork.months).toBeCloseTo(6, 10);
+    expect(fromReg.months).toBeCloseTo(6, 10);
+  });
+
+  it('cites the frikøbsnotat on the Vipomatic step', () => {
+    const step = solve(base).trace.steps.find((s) => s.id === 'vipomatic.timer')!;
+    expect(step.sourceRef?.file).toBe('rules/Frikoeb_IKK_notat_2026.pdf');
+  });
+});
+
+describe('semesters — the frikøb laid out semester by semester', () => {
+  it('500.000 kr at 70.000: one full semester + a partial one, summing to the Vipomatic figure', () => {
+    const r = solve({ ...base, monthlyCostKr: 70_000, given: { moneyKr: 500_000 } });
+    expect(r.semesters.map((x) => x.hours)).toEqual([495, 94]);
+    expect(r.semesters[0].fill).toBe(1);
+    expect(r.semesters[1].fill).toBeCloseTo(1.142857 / 6, 5);
+    expect(r.semesters[1].remainingHours).toBe(401);
+    expect(r.hours.hoursToRegisterWhole).toBe(589);
+  });
+
+  it('exactly 12 md is two full semesters, no empty third', () => {
+    const r = solve({ ...base, solveFor: 'money', given: { months: 12 } });
+    expect(r.semesters.map((x) => x.fill)).toEqual([1, 1]);
+  });
+
+  it('always sums to hoursToRegisterWhole, also on the 822 basis', () => {
+    for (const months of [1, 5.5, 6, 7.3, 12, 13, 40]) {
+      for (const asOf of ['2023-06-01', '2026-06-01']) {
+        const r = solve({ ...base, asOf, solveFor: 'money', given: { months } });
+        expect(r.semesters.reduce((a, x) => a + x.hours, 0)).toBe(r.hours.hoursToRegisterWhole);
+      }
+    }
+  });
+
+  it('is empty for a zero frikøb', () => {
+    expect(solve({ ...base, given: { moneyKr: 0 } }).semesters).toEqual([]);
+  });
+});
+
 describe('workDays — arbejdsdage, confirmed 2026-09-01', () => {
   it('divides total work hours by the confirmed 7,24 t full work day, floored to whole days', () => {
     // months = 100_000 / 50_000 = 2; workHours = 2 × 1650/12 = 275; 275/7,24 = 37,9834… → 37
@@ -202,103 +273,6 @@ describe('workDays — arbejdsdage, confirmed 2026-09-01', () => {
     const b = solve({ ...base, variant: 'undervisning', undervisningsBasis: 'full_month_equivalent' });
     expect(a.hours.workDays).toBe(Math.floor(a.hours.workHours / 7.24));
     expect(b.hours.workDays).toBe(Math.floor(b.hours.workHours / 7.24));
-  });
-});
-
-describe('cost stack wired into solve()', () => {
-  const priced: Scenario = {
-    ...base,
-    solveFor: 'money',
-    given: { months: 6 },
-    monthlyCostKr: 70_000,
-    pricing: {
-      mechanism: 'rekvireret_idv',
-      asOf: '2026-06-01',
-      overheadId: 'idv-105-2026',
-      marginId: 'idv-min-10',
-      applyMoms: true,
-    },
-    operatingKr: 50_000,
-  };
-
-  it('returns no price when no pricing policy is given', () => {
-    expect(solve(base).price).toBeNull();
-  });
-
-  it('builds the full stack on top of the salary figure', () => {
-    const r = solve(priced);
-    expect(r.moneyKr).toBe(420_000); // 6 md × 70.000
-    expect(r.price).not.toBeNull();
-    expect(r.price!.overheadKr).toBe(441_000); // 105% of salary ONLY, not of 470.000
-    expect(r.price!.directOperatingKr).toBe(50_000);
-    expect(r.price!.headlineKr).toBeGreaterThan(r.moneyKr);
-  });
-
-  it('grant overhead applies to operating costs too — IDV does not', () => {
-    const idv = solve(priced).price!;
-    const grant = solve({
-      ...priced,
-      pricing: { mechanism: 'tilskudsfinansieret', asOf: '2026-06-01', overheadId: 'tilskud-44' },
-    }).price!;
-    // IDV: 105% × 420.000 = 441.000. Grant: 44% × 470.000 = 206.800.
-    expect(idv.overheadKr).toBe(441_000);
-    expect(grant.overheadKr).toBe(206_800);
-  });
-
-  it('renders the cost stack into the trace', () => {
-    const md = traceToMarkdown(solve(priced).trace);
-    expect(md).toMatch(/Overhead/);
-    expect(md).toMatch(/Overskudsgrad/);
-    expect(md).toMatch(/Moms/);
-  });
-
-  it('surfaces cost-stack warnings on the result', () => {
-    const r = solve({
-      ...priced,
-      pricing: { mechanism: 'samfinansieret', asOf: '2026-06-01', overheadId: 'inkluderet-i-timesats' },
-    });
-    expect(r.warnings.map((w) => w.code)).toContain('OVERHEAD_INCLUDED_IN_RATE');
-  });
-});
-
-describe('market floor check', () => {
-  const cheap: Scenario = {
-    ...base,
-    solveFor: 'money',
-    given: { months: 6 },
-    monthlyCostKr: 20_000, // deliberately far too low
-    pricing: {
-      mechanism: 'rekvireret_idv',
-      asOf: '2026-06-01',
-      overheadId: 'idv-105-2026',
-      marginId: 'idv-min-10',
-    },
-    marketFloorTableId: 'kommerciel-2019',
-  };
-
-  it('blocks when the effective hourly price undercuts the guiding takst', () => {
-    const r = solve(cheap);
-    const w = r.warnings.find((x) => x.code === 'BELOW_MARKET_FLOOR');
-    expect(w?.severity).toBe('block');
-    expect(w?.message).toMatch(/underbyde markedet/);
-  });
-
-  it('passes at a realistic cost price', () => {
-    const r = solve({ ...cheap, monthlyCostKr: 70_000 });
-    expect(r.warnings.map((w) => w.code)).not.toContain('BELOW_MARKET_FLOOR');
-  });
-
-  it('warns that the 2019 rates are stale', () => {
-    expect(solve(cheap).warnings.map((w) => w.code)).toContain('RATE_TABLE_STALE');
-  });
-
-  it('skips the check for a category with no published rate', () => {
-    const r = solve({
-      ...cheap,
-      category: 'studieadjunkt_studielektor',
-      monthlyCostKr: 70_000,
-    });
-    expect(r.warnings.map((w) => w.code)).toContain('NO_GUIDING_RATE_FOR_CATEGORY');
   });
 });
 
@@ -368,46 +342,6 @@ describe('employmentFraction — part-time staff', () => {
     const half = solve({ ...base, employmentFraction: 0.5 });
     expect(full.trace.steps.some((s) => s.id === 'forudsaetninger.aarsnorm.deltid')).toBe(false);
     expect(half.trace.steps.some((s) => s.id === 'forudsaetninger.aarsnorm.deltid')).toBe(true);
-  });
-});
-
-describe('hour bases must not be mixed — regression', () => {
-  const idv: Scenario = {
-    ...base,
-    solveFor: 'money',
-    given: { months: 6 },
-    monthlyCostKr: 70_000,
-    pricing: {
-      mechanism: 'rekvireret_idv',
-      asOf: '2026-06-01',
-      overheadId: 'idv-105-2026',
-      marginId: 'idv-min-10',
-    },
-    marketFloorTableId: 'kommerciel-2019',
-  };
-
-  it('bills on the 1485 productive basis, not the 1650 workload norm', () => {
-    const r = solve(idv);
-    const step = r.trace.steps.find((s) => s.id === 'kontrol.markedsproeve')!;
-
-    // 6 md × 1485/12 = 742,5 billable hours — NOT 825 (the 1650 workload basis).
-    const billable = step.inputs.find((i) => i.label === 'Fakturerbare timer')!.value.value;
-    expect(billable).toBeCloseTo(742.5, 1);
-    expect(billable).not.toBeCloseTo(r.hours.workHours, 0);
-
-    // Same money over fewer hours ⇒ a higher effective rate, which is what clears
-    // the 1.220 kr/t floor. Using the workload norm gave ~1.148 and failed.
-    expect(step.output.value).toBeGreaterThan(1220);
-  });
-
-  it('still registers Vipomatic hours on the workload norm', () => {
-    // The two bases coexist in one result and must not have been conflated.
-    expect(solve(idv).hours.workHours).toBe(825); // 6 × 1650/12
-  });
-
-  it('says which basis it used, so the derivation is defensible', () => {
-    const md = traceToMarkdown(solve(idv).trace);
-    expect(md).toMatch(/produktive timenorm \(1485 t\/år\)/);
   });
 });
 

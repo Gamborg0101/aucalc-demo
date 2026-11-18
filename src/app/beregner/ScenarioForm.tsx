@@ -1,56 +1,13 @@
 'use client';
 
 import { useState, type WheelEvent } from 'react';
-import {
-  CATEGORY_NORMS,
-  selectCategoryNorm,
-  takstFor,
-  OVERHEAD_POLICIES,
-  MARGIN_POLICIES,
-  RATE_TABLES,
-  type EmploymentCategory,
-  type FundingMechanism,
-} from '@/lib/frikoeb';
+import { CATEGORY_NORMS, selectCategoryNorm, type EmploymentCategory } from '@/lib/frikoeb';
 import { FULL_TIME_WEEKLY_HOURS, type FormState } from './scenario';
-
-/**
- * Sensible per-mechanism starting points, applied when the consultant switches
- * Finansieringsmekanisme — not a constraint the engine enforces. Any overhead/
- * margin/rate-table id can still be combined with any mechanism afterward.
- */
-const MECHANISM_DEFAULTS: Record<
-  FundingMechanism,
-  { overheadId: string; marginId: string; applyMoms: boolean; marketFloorTableId: string }
-> = {
-  tilskudsfinansieret: { overheadId: 'tilskud-44', marginId: '', applyMoms: false, marketFloorTableId: '' },
-  rekvireret_idv: {
-    overheadId: 'idv-105-2026',
-    marginId: 'idv-min-10',
-    applyMoms: true,
-    marketFloorTableId: 'kommerciel-2019',
-  },
-  samfinansieret: {
-    overheadId: 'inkluderet-i-timesats',
-    marginId: '',
-    applyMoms: false,
-    marketFloorTableId: 'samfinansieret-2019',
-  },
-};
 
 interface Props {
   value: FormState;
   onChange: (next: FormState) => void;
 }
-
-/** Which Takstkatalog row to suggest as a starting kostpris, per category. */
-const TAKST_CODE_FOR_CATEGORY: Partial<Record<EmploymentCategory, string>> = {
-  professor: '111',
-  adjunkt: '131',
-  lektor: '121',
-  postdoc: '137',
-  videnskabelig_assistent_underv: '154',
-  phd: '212',
-};
 
 /**
  * The categories offered in the Stillingskategori picker. Consultant feedback
@@ -167,15 +124,9 @@ function KrField({ value, onChange }: { value: string; onChange: (digits: string
 export function ScenarioForm({ value, onChange }: Props) {
   const set = <K extends keyof FormState>(key: K, v: FormState[K]) => onChange({ ...value, [key]: v });
 
-  const setMechanism = (mechanism: FundingMechanism) => {
-    const d = MECHANISM_DEFAULTS[mechanism];
-    onChange({ ...value, mechanism, ...d });
-  };
-
   const norm = selectCategoryNorm(value.category);
   const needsShareOverride = norm.registeredShare === null;
-  const takstCode = TAKST_CODE_FOR_CATEGORY[value.category];
-  const suggestedKostpris = takstCode ? takstFor(takstCode, 2026, 'middel') : null;
+  const registeredPct = norm.registeredShare !== null ? Math.round(norm.registeredShare * 100) : null;
 
   // Normally just the three calculator categories — but if the current value came
   // from an older shared link naming a narrower category, keep it selectable so the
@@ -229,70 +180,27 @@ export function ScenarioForm({ value, onChange }: Props) {
         <label>
           <span className={labelCls}>Månedlig kostpris (kr)</span>
           <KrField value={value.monthlyCostKr} onChange={(digits) => set('monthlyCostKr', digits)} />
-          <p className={hintCls}>
-            {suggestedKostpris !== null ? (
-              <>
-                Navngiven person? Brug kostprisen fra Navision. Ellers{' '}
-                <button
-                  type="button"
-                  className="font-medium text-accent underline decoration-dotted underline-offset-2 hover:opacity-80"
-                  onClick={() => set('monthlyCostKr', String(suggestedKostpris))}
-                >
-                  {suggestedKostpris.toLocaleString('da-DK')} kr — brug denne
-                </button>
-                . Kostpris er højere end lønnen (indregner bl.a. pension).
-              </>
-            ) : (
-              'Navngiven person? Brug kostprisen fra Navision. Ellers se Satser og normer. Kostpris er højere end lønnen (indregner bl.a. pension).'
-            )}
-          </p>
+          <p className={hintCls}>Navngiven person? Brug kostprisen fra Navision.</p>
         </label>
       </fieldset>
 
       <fieldset className={fieldsetCls}>
         <legend className={legendCls}>Frikøbstype</legend>
 
-        <div className="flex flex-col gap-2">
-          <label className={radioLabelCls}>
-            <input
-              type="radio"
-              name="variant"
-              checked={value.variant === 'undervisning'}
-              onChange={() => set('variant', 'undervisning')}
-            />
-            Frikøb (standard)
-          </label>
-          <label className={radioLabelCls}>
-            <input
-              type="radio"
-              name="variant"
-              checked={value.variant === 'fuldt'}
-              onChange={() => set('variant', 'fuldt')}
-            />
-            Fuld kostpris
-          </label>
+        <div className="flex flex-col gap-1 rounded-md bg-zinc-100 p-3 dark:bg-zinc-800/60">
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Frikøb Standard</span>
+          <span className={hintCls}>
+            Fonden betaler fuld kostpris (undervisning og forskning) — til gengæld bruges hele
+            arbejdstiden på projektet.
+            {registeredPct !== null && (
+              <>
+                {' '}
+                Af arbejdstiden registreres {registeredPct}% i Vipomatic; de {100 - registeredPct}%
+                forskningstid registreres ikke nogen steder (jf. frikøbsnotatet).
+              </>
+            )}
+          </span>
         </div>
-
-        {value.variant === 'undervisning' && (
-          <div className="flex flex-col gap-1 rounded-md bg-zinc-100 p-3 dark:bg-zinc-800/60">
-            <span className="text-sm text-zinc-800 dark:text-zinc-200">
-              Fonden betaler {norm.registeredShare !== null ? `${Math.round(norm.registeredShare * 100)}%` : 'kun andelen'}{' '}
-              af lønnen
-            </span>
-            <span className={hintCls}>
-              Kun undervisningsdelen skal dækkes — instituttet finansierer selv forskningsdelen.
-              Bevillingen rækker derfor længere end ved fuld kostpris.
-            </span>
-          </div>
-        )}
-
-        {value.variant === 'fuldt' && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Fonden betaler fuld kostpris (undervisning og forskning) — til gengæld bruges den fulde
-            arbejdstiden på projektet. Bruges kun når fonden kræver fuld løndækning; sjældnere end
-            almindeligt frikøb.
-          </p>
-        )}
       </fieldset>
 
       <fieldset className={fieldsetCls}>
@@ -321,6 +229,15 @@ export function ScenarioForm({ value, onChange }: Props) {
             <input
               type="radio"
               name="knownField"
+              checked={value.knownField === 'workHours'}
+              onChange={() => set('knownField', 'workHours')}
+            />
+            Samlet arbejdstid (timer)
+          </label>
+          <label className={radioLabelCls}>
+            <input
+              type="radio"
+              name="knownField"
               checked={value.knownField === 'hoursRegistered'}
               onChange={() => set('knownField', 'hoursRegistered')}
             />
@@ -333,6 +250,28 @@ export function ScenarioForm({ value, onChange }: Props) {
             <label>
               <span className={labelCls}>Eksternt bidrag (kr)</span>
               <KrField value={value.moneyKr} onChange={(digits) => set('moneyKr', digits)} />
+            </label>
+          )}
+
+          {value.knownField === 'workHours' && (
+            <label>
+              <span className={labelCls}>Samlet arbejdstid (timer)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                className={inputCls}
+                placeholder="fx 100"
+                value={value.workHours}
+                onChange={(e) => set('workHours', e.target.value)}
+                onWheel={blurOnWheel}
+              />
+              {registeredPct !== null && (
+                <p className={hintCls}>
+                  Undervisning og forskning tilsammen. {registeredPct}% registreres i Vipomatic, resten er
+                  forskningstid.
+                </p>
+              )}
             </label>
           )}
 
@@ -517,101 +456,6 @@ export function ScenarioForm({ value, onChange }: Props) {
         </div>
       </details>
 
-      <details className="group rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-zinc-900 marker:content-none dark:text-zinc-100">
-          Pris og omkostningsstak
-          <span aria-hidden="true" className="text-zinc-400 transition-transform group-open:rotate-180 dark:text-zinc-500">
-            ▾
-          </span>
-        </summary>
-        <div className="flex flex-col gap-4 border-t border-zinc-200 p-4 dark:border-zinc-800">
-          <label className={radioLabelCls}>
-            <input
-              type="checkbox"
-              checked={value.pricingEnabled}
-              onChange={(e) => set('pricingEnabled', e.target.checked)}
-            />
-            Vis fuld prisberegning (overhead, avance, moms)
-          </label>
-          <p className={hintCls}>
-            Lad stå slukket til en almindelig frikøbsberegning, hvor bevillingen allerede er
-            lønomkostningen. Slå til for at lægge overhead/avance/moms oveni — fx et IDV-tilbud til
-            en virksomhed.
-          </p>
-
-          {value.pricingEnabled && (
-            <>
-              <label>
-                <span className={labelCls}>Finansieringsmekanisme</span>
-                <select
-                  className={inputCls}
-                  value={value.mechanism}
-                  onChange={(e) => setMechanism(e.target.value as FundingMechanism)}
-                >
-                  <option value="tilskudsfinansieret">Tilskudsfinansieret forskning (fondsbevilling)</option>
-                  <option value="rekvireret_idv">Indtægtsdækket virksomhed (en virksomhed betaler)</option>
-                  <option value="samfinansieret">Samfinansieret forskning (samarbejde)</option>
-                </select>
-              </label>
-
-              <label>
-                <span className={labelCls}>Overhead</span>
-                <select className={inputCls} value={value.overheadId} onChange={(e) => set('overheadId', e.target.value)}>
-                  {OVERHEAD_POLICIES.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span className={labelCls}>Overskudsgrad</span>
-                <select className={inputCls} value={value.marginId} onChange={(e) => set('marginId', e.target.value)}>
-                  <option value="">Ingen</option>
-                  {MARGIN_POLICIES.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-                <p className={hintCls}>Kun relevant ved indtægtsdækket virksomhed (IDV).</p>
-              </label>
-
-              <label className={radioLabelCls}>
-                <input type="checkbox" checked={value.applyMoms} onChange={(e) => set('applyMoms', e.target.checked)} />
-                Tillæg moms (25%) — kun kommerciel IDV
-              </label>
-
-              <label>
-                <span className={labelCls}>Direkte driftsomkostninger (kr)</span>
-                <KrField value={value.operatingKr} onChange={(digits) => set('operatingKr', digits)} />
-                <p className={hintCls}>Rejser, materialer, publicering. Lad stå tom, hvis der ingen er.</p>
-              </label>
-
-              <label>
-                <span className={labelCls}>Markedsprøve mod vejledende timetakst</span>
-                <select
-                  className={inputCls}
-                  value={value.marketFloorTableId}
-                  onChange={(e) => set('marketFloorTableId', e.target.value)}
-                >
-                  <option value="">Ingen</option>
-                  {RATE_TABLES.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <p className={hintCls}>
-                  Kontrollerer at den effektive timepris ikke underbyder markedet — &ldquo;AU må
-                  ikke underbyde markedet&rdquo;. Kun relevant ved IDV.
-                </p>
-              </label>
-            </>
-          )}
-        </div>
-      </details>
     </form>
   );
 }

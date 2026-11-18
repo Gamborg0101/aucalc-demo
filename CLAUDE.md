@@ -7,8 +7,8 @@ blocking unknowns remain. See `docs/open-questions.md` for the three items sent 
 consultants for confirmation (none block building) and `docs/STATUS.md` for exactly where to
 resume.
 
-**Built and passing (169 tests):** the pure calculation core — units, rounding profiles, the
-date-versioned config, the derivation trace, the bidirectional solver, the full cost stack,
+**Built and passing (151 tests):** the pure calculation core — units, rounding profiles, the
+date-versioned config, the derivation trace, the bidirectional solver, per-semester credit,
 multi-year timelines (wired into `solve()` 2026-09-21), and part-time (`employmentFraction`)
 support. All worked examples from every source document reproduce exactly. The UI (`/beregner`,
 `/satser`, `/om`) is built and verified in-browser.
@@ -22,16 +22,23 @@ verification; no formal retention policy).
 **Deployed on Vercel.** Deployed and QA'd end-to-end 2026-09-03, including a
 dedicated security pass — see `docs/STATUS.md` for the findings and what got fixed.
 
-**2026-09-21 — the three remaining engine/UI gaps are closed:** multi-year `timeline.ts` is wired
-into `solve()`, the pricing/cost-stack UI is built into `/beregner`, and Princip 6 (PI
-teaching-credit for postdoc grants) is implemented as its own standalone calculation + card.
-Details in `docs/STATUS.md`.
+**2026-09-21 — engine gaps closed:** multi-year `timeline.ts` is wired into `solve()`, and Princip 6
+(PI teaching-credit for postdoc grants) is implemented as its own standalone calculation. (The
+pricing/cost-stack UI built that day was removed again in R36, below.) Details in `docs/STATUS.md`.
 
 **Consultant feedback is now coming in.** Six rounds landed and were incorporated 2026-09-22
 (R27–R32 in `docs/open-questions.md`) — label wording, explanatory text, audience framing, the
 kostpris/løn distinction, a Vipomatic rounding confirmation, and a trace-density cleanup. Expect
 more; see `docs/open-questions.md` for the running log and `docs/STATUS.md` under "Next" for the
 remaining, not-yet-consultant-driven items (deployment/privacy follow-ups mainly).
+
+**2026-10-27 — R36, read before touching frikøbstype.** Practitioner input (anonymised) showed the
+calculator has **one variant only: "Frikøb Standard" = full kostpris** (`variant: 'fuldt'`). 60% of
+the work time is registered in Vipomatic and the 40% research time is registered nowhere. **R26/R27
+(undervisning as default) were wrong; do not reintroduce them.** The IDV/overhead/margin/moms/
+market-floor pricing stack is removed from engine and UI. A "Samlet arbejdstid" input (URL `w`)
+was added as a starting point. Later the same round, `solve()` gained per-semester credit
+(`semesters`, shown in `SemesterStrip`).
 
 ---
 
@@ -56,7 +63,7 @@ a consultant can paste into a project budget and defend to a funder.
 | **frikøb** | Buy-out. External funds pay for a researcher's time. |
 | **fuldt frikøb** | Full buy-out. Institute compensated the full cost; researcher commits **all** work time (teaching + research) to the project. |
 | **frikøbsprocent** | The share of a person's full time bought. Partial frikøb is a *lower percentage at full cost*, not a cheaper month. |
-| **undervisningsfrikøb** | Funder buys only the teaching obligation; institute compensated 60% of salary. The calculator's default ("Frikøb (standard)"), per practitioner input. See `docs/open-questions.md` R26. |
+| **undervisningsfrikøb** | Funder buys only the teaching obligation; institute compensated 60% of salary. Rare. Kept in the engine, **not offered in the UI** (R36). |
 | **kostpris** | ⚠️ Formally an **HOURLY** rate: `(månedsløn / 160,33) × feriefaktor + bidrag`. Individual per employee, lives in Navision. AU also publishes it converted to a monthly figure. |
 | **månedsløn** | Monthly salary. An *input* to the kostpris formula, not the same thing. |
 | **medfinansiering** | AU's contribution. Narrow sense (frikøb notes): the researcher's own research time in kind. Broad sense (FSE): also salary, equipment, premises, software. |
@@ -193,6 +200,9 @@ npm run dev · npm test · npm run lint · npm run typecheck · npm run build
 
 ---
 
+> Note: sections below on overhead, IDV and pricing (rule 5, glossary, R26/R27 history) are
+> historical; that stack was removed in R36.
+
 ## Source documents — `rules/`
 
 Topic-prefixed. Every config constant cites one via `DocumentRef`.
@@ -200,7 +210,6 @@ Topic-prefixed. Every config constant cites one via `DocumentRef`.
 - `Arbejdstid_*` — the ARTS arbejdstidsaftale (**outranks institute notes**), ph.d. work rules
 - `Frikoeb_*` — IKS notat + FAQ (2022), IKK notat (2026), **IKK politik** (the frikøb policy)
 - `Kostpris_*` — procesdokument, historiske formler, takstkatalog 2024/25/**26**, hvad koster en
-- `IDV_*` — overheadsats 2026/27, vejledning, miniguide, priskalkulationsskema, AU Cetera prisliste
 - `Loen_*` — Arts lønaftale 2025
 - `NOTES-*.md` — analysis per topic. **Verified facts are kept separate from unverified ones.**
 

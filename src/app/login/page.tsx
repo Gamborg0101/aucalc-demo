@@ -27,7 +27,7 @@ export default async function LoginPage(props: PageProps<'/login'>) {
           value={typeof callbackUrl === 'string' ? callbackUrl : ''}
         />
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Brugernavn</span>
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Brugernavn eller e-mail</span>
           <input
             type="text"
             name="username"
@@ -40,7 +40,7 @@ export default async function LoginPage(props: PageProps<'/login'>) {
         <PasswordField label="Adgangskode" name="password" autoComplete="current-password" />
         {error && (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            Forkert brugernavn eller adgangskode. Prøv igen.
+            Forkert brugernavn/e-mail eller adgangskode. Prøv igen.
           </p>
         )}
         <button

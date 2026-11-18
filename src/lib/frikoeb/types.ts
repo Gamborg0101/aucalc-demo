@@ -21,18 +21,14 @@ export interface DocumentRef {
   locator?: string;
 }
 
-export type FundingMechanism =
-  /** Fondsbevilling. Cost-price based. */
-  | 'tilskudsfinansieret'
-  /** Indtægtsdækket virksomhed — a company pays AU. Market floor, VAT. */
-  | 'rekvireret_idv'
-  /** Genuine collaboration. Negotiated rates; institute may co-finance. */
-  | 'samfinansieret';
-
 export type FrikoebVariant =
-  /** Full cost price compensated; researcher commits all work time. */
+  /**
+   * Frikøb Standard — the only variant the calculator offers (2026-10-27). Full
+   * kostpris compensated; the researcher commits all work time to the project;
+   * 60% is registered in Vipomatic and the 40% research share nowhere.
+   */
   | 'fuldt'
-  /** Only the teaching obligation bought; institute compensated 60% of salary. */
+  /** Only the teaching obligation bought; institute compensated 60% of salary. Engine only — not offered in the UI. */
   | 'undervisning';
 
 /**

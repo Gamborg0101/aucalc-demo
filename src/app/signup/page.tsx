@@ -33,7 +33,7 @@ export default async function SignupPage(props: PageProps<'/signup'>) {
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Brugernavn</span>
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Brugernavn eller e-mail</span>
           <input
             type="text"
             name="username"
@@ -57,7 +57,7 @@ export default async function SignupPage(props: PageProps<'/signup'>) {
         />
         {error === 'taken' && (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            Det brugernavn er allerede taget.
+            Det brugernavn eller den e-mail er allerede i brug.
           </p>
         )}
         {error === 'mismatch' && (
@@ -67,7 +67,7 @@ export default async function SignupPage(props: PageProps<'/signup'>) {
         )}
         {error === '1' && (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            Udfyld navn, brugernavn og en adgangskode på mindst 8 tegn.
+            Udfyld navn, brugernavn eller e-mail og en adgangskode på mindst 8 tegn.
           </p>
         )}
         <button

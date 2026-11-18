@@ -9,9 +9,8 @@
  *   const result = solve({
  *     asOf: '2026-01-01',
  *     category: 'lektor',
- *     variant: 'undervisning',
- *     undervisningsBasis: 'salary_scaled',
- *     monthlyCostKr: takstFor('121', 2026, 'middel')!,   // 70.000
+ *     variant: 'fuldt',
+ *     monthlyCostKr: 70_000, // the person's kostpris from Navision
  *     solveFor: 'months',
  *     given: { moneyKr: 210_000 },
  *   });
@@ -20,7 +19,7 @@
 
 // --- solving ---------------------------------------------------------------
 export { solve } from './solve';
-export type { Scenario, FrikoebResult, SolveTarget, CalcWarning } from './solve';
+export type { Scenario, FrikoebResult, SemesterSlot, SolveTarget, CalcWarning } from './solve';
 
 // --- conversion primitives -------------------------------------------------
 export {
@@ -31,16 +30,6 @@ export {
   priceCoefficient,
 } from './convert';
 export type { HoursBreakdown } from './convert';
-
-// --- pricing ---------------------------------------------------------------
-export {
-  computePrice,
-  directSalaryFromTotal,
-  salaryGrossUpFactor,
-  operatingContribution,
-  checkMarketFloor,
-} from './pricing';
-export type { DirectCosts, PricingPolicy, PriceBreakdown, PriceWarning } from './pricing';
 
 // --- trace -----------------------------------------------------------------
 export { traceToMarkdown, TraceBuilder, da, daLoose } from './trace';
@@ -54,7 +43,6 @@ export type { RoundingProfile, RoundingProfileId, RoundMode } from './rounding';
 export { DEFAULT_UNDERVISNINGS_BASIS } from './types';
 export type {
   DocumentRef,
-  FundingMechanism,
   FrikoebVariant,
   UndervisningsBasis,
   InstituteId,
@@ -73,14 +61,6 @@ export {
 export type { AarsnormPeriod, CategoryNorm, EmploymentCategory } from './config/norms';
 
 export {
-  OVERHEAD_POLICIES,
-  MARGIN_POLICIES,
-  MOMS_RATE,
-  selectOverheadAt,
-} from './config/overhead';
-export type { OverheadPolicy, MarginPolicy, OverheadBase } from './config/overhead';
-
-export {
   TAKSTKATALOG,
   KOSTPRIS_PARAMS,
   SU_SATSER,
@@ -93,17 +73,6 @@ export {
   suPhdKostprisPerHour,
 } from './config/kostpris';
 export type { TakstRow, KostprisParams, Kvartil } from './config/kostpris';
-
-export {
-  RATE_TABLES,
-  AU_CETERA_2026,
-  STALE_AFTER_MONTHS,
-  selectRateTable,
-  guidingRate,
-  isStale,
-  rateCategoryFor,
-} from './config/rates';
-export type { RateTable, RateCategory } from './config/rates';
 
 export { INDEXATION_POLICIES, selectIndexation, indexFactor } from './config/indexation';
 export type { IndexationPolicy } from './config/indexation';

@@ -28,7 +28,6 @@ export const SRC_PRISKALK: DocumentRef = {
   title: 'Priskalkulationsskema DR2 2026 — Takstkatalog',
   org: 'AU_ARTS',
   dated: '2025-09-17',
-  file: 'rules/IDV_priskalkulationsskema_2026.xlsm',
 };
 
 export interface IndexationPolicy {

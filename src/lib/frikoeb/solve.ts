@@ -24,6 +24,7 @@ import {
   selectAarsnormAt,
   selectCategoryNorm,
   scaleNorm,
+  SRC_IKK_2026,
   type EmploymentCategory,
   type AarsnormPeriod,
 } from './config/norms';
@@ -48,20 +49,6 @@ import {
   percent,
   type CalcTrace,
 } from './trace';
-import { computePrice, checkMarketFloor, type PriceBreakdown, type PricingPolicy } from './pricing';
-import {
-  guidingRate,
-  isStale,
-  rateCategoryFor,
-  selectRateTable,
-} from './config/rates';
-
-/**
- * ARTS bills DR2 projects on a 1485-hour productive basis (TECH 1460, others 1580,
- * and DR2 must never exceed 1580). This is NOT the 1650 workload norm and NOT the
- * 1924 payroll norm. Source: IDV_priskalkulationsskema_2026.xlsm maintenance notes.
- */
-const ARTS_PRODUCTIVE_ANNUAL_HOURS = 1485;
 import type { FrikoebVariant, ISODate, UndervisningsBasis } from './types';
 
 export type SolveTarget = 'months' | 'money' | 'hoursRegistered';
@@ -80,21 +67,14 @@ export interface Scenario {
    */
   registeredShareOverride?: number;
   solveFor: SolveTarget;
-  given: Partial<{ months: number; moneyKr: number; hoursRegistered: number }>;
+  /**
+   * `workHours` is the frikøb's total arbejdstid — research and teaching together.
+   * Only `andel` of it is registered in Vipomatic (60% for lektor/adjunkt/professor);
+   * the rest is research time that is never registered.
+   */
+  given: Partial<{ months: number; moneyKr: number; hoursRegistered: number; workHours: number }>;
   profile?: RoundingProfileId;
   snapToWholeMonths?: 'off' | 'down';
-  /**
-   * Optional cost stack. When present, the salary figure derived from months is fed
-   * through overhead, margin and moms, and the market floor is checked.
-   *
-   * Omit it for a plain frikøb calculation — "how many months does this grant buy" —
-   * where the funder's figure already is the salary cost.
-   */
-  pricing?: PricingPolicy;
-  /** Travel, materials, publication. Grant overhead applies to these; IDV's does not. */
-  operatingKr?: number;
-  /** Rate table id for the market-floor check. Only meaningful with `pricing`. */
-  marketFloorTableId?: string;
   /**
    * Fraction of full-time employment, e.g. 0,81 for a 30-timers uge on a
    * 37-timers fuldtidsnorm. Scales the effective annual work hours — and the
@@ -120,25 +100,33 @@ export interface CalcWarning {
   code:
     | 'NO_FIXED_NORM_FOR_CATEGORY'
     | 'DEFAULT_KOSTPRIS_USED'
-    | 'NOT_WHOLE_SALARY_MONTHS'
-    | 'RATE_TABLE_STALE'
-    | 'NO_GUIDING_RATE_FOR_CATEGORY'
-    | 'BELOW_MARKET_FLOOR'
-    | 'OVERHEAD_INCLUDED_IN_RATE'
-    | 'NO_OVERHEAD_REQUIRES_AGREEMENT'
-    | 'MARGIN_BASE_UNCONFIRMED';
+    | 'NOT_WHOLE_SALARY_MONTHS';
   severity: 'info' | 'warn' | 'block';
   message: string;
+}
+
+/** One semester of the frikøb, assuming it starts at a semester start. */
+export interface SemesterSlot {
+  /** 1-based. */
+  index: number;
+  /** Frikøb months falling in this semester, 0 < months ≤ 6. */
+  months: number;
+  /** Whole Vipomatic hours credited in this semester. All slots sum to `hours.hoursToRegisterWhole`. */
+  hours: number;
+  /** The semester's teaching norm (495 t on the 2024+ basis, scaled for part-time). */
+  normHours: number;
+  /** Teaching the researcher still owes in this semester: normHours − hours, never negative. */
+  remainingHours: number;
+  /** months / 6 — how full the semester is, 0–1. */
+  fill: number;
 }
 
 export interface FrikoebResult {
   months: number;
   monthsSnapped: number | null;
   hours: HoursBreakdown;
-  /** Direct salary cost. The frikøb figure itself, before any cost stack. */
+  /** Direct salary cost — the frikøb figure itself. */
   moneyKr: number;
-  /** Full cost stack. Present only when `pricing` was supplied. */
-  price: PriceBreakdown | null;
   /**
    * What the researcher still owes the institute in the affected semester:
    * semesternorm − credited hours. All three IKK policy examples state this.
@@ -148,6 +136,11 @@ export interface FrikoebResult {
     creditedThisSemesterHours: number;
     remainingObligationHours: number;
   };
+  /**
+   * The frikøb laid out semester by semester: full semesters first, the last one
+   * possibly partial. Assumes the frikøb starts at a semester start.
+   */
+  semesters: SemesterSlot[];
   registeredShare: number;
   norm: AarsnormPeriod;
   /** Present only when `scenario.timeline` was supplied — the per-year segments. */
@@ -310,8 +303,31 @@ export function solve(scenario: Scenario): FrikoebResult {
             ? 'Se den flerårige fordeling nedenfor for beløb og timer år for år.'
             : undefined,
         });
+      } else if (scenario.given.workHours !== undefined) {
+        const w = scenario.given.workHours;
+        t.input('input.arbejdstimer', 'Samlet arbejdstid', hoursVal(w));
+        monthsSourceStepId = 'tid.maaneder.fraArbejdstimer';
+        months = t.step({
+          id: 'tid.maaneder.fraArbejdstimer',
+          kind: 'derived',
+          label: 'Arbejdstid omregnet til lønmåneder',
+          formula: timelineRequested ? 'arbejdstimer fordelt år for år mod årsnormen' : 'arbejdstimer × 12 ÷ årsnorm',
+          substituted: timelineRequested
+            ? `${daLoose(w)} t fra ${scenario.asOf}`
+            : `${daLoose(w)} t × 12 ÷ ${da(norm.annualWorkHours)} t`,
+          inputs: [{ label: 'Samlet arbejdstid', value: hoursVal(w), ref: 'input.arbejdstimer' }],
+          // A share of 1 turns the registered-hours inverse into the work-hours inverse.
+          output: monthsVal(
+            timelineRequested
+              ? monthsFromRegisteredHoursTimeline(w, scenario.asOf, 1, employmentFraction)
+              : monthsFromRegisteredHours(w, norm, 1),
+          ),
+          note: timelineRequested
+            ? 'Se den flerårige fordeling nedenfor for beløb og timer år for år.'
+            : undefined,
+        });
       } else {
-        throw new Error('solveFor "months" kræver enten moneyKr eller hoursRegistered.');
+        throw new Error('solveFor "months" kræver moneyKr, hoursRegistered eller workHours.');
       }
       break;
     }
@@ -362,7 +378,6 @@ export function solve(scenario: Scenario): FrikoebResult {
   const h = timelineResult ? aggregateHours(timelineResult.segments) : hoursFromMonths(months, norm, share, profile);
 
   t.section('vipomatic');
-  const arbejdsdageNote = `Svarer til ${da(h.workDays, 0)} arbejdsdage (7,24 t/dag).`;
   t.step({
     id: 'vipomatic.arbejdstimer',
     kind: 'derived',
@@ -372,8 +387,8 @@ export function solve(scenario: Scenario): FrikoebResult {
     inputs: [{ label: 'Måneder', value: monthsVal(months) }],
     output: hoursVal(h.workHours),
     note: timelineResult
-      ? `Summeret på tværs af årene — årsnormen kan ændre sig undervejs. Se den flerårige fordeling nedenfor. ${arbejdsdageNote}`
-      : arbejdsdageNote,
+      ? 'Summeret på tværs af årene — årsnormen kan ændre sig undervejs. Se den flerårige fordeling nedenfor.'
+      : undefined,
   });
   t.step({
     id: 'vipomatic.timer',
@@ -390,6 +405,7 @@ export function solve(scenario: Scenario): FrikoebResult {
       after: h.hoursToRegisterWhole,
       discarded: h.discardedByFlooring,
     },
+    sourceRef: { ...SRC_IKK_2026, locator: 'eksemplet 137,5 × 0,6 = 82,5 timer' },
     note: 'Vipomatic runder ikke manuelt indtastede tal — skriv dette tal ind.',
   });
   t.step({
@@ -399,6 +415,7 @@ export function solve(scenario: Scenario): FrikoebResult {
     formula: 'arbejdstimer × (1 − andel)',
     inputs: [{ label: 'Arbejdstimer', value: hoursVal(h.workHours), ref: 'vipomatic.arbejdstimer' }],
     output: hoursVal(h.researchHours),
+    note: 'Registreres ikke nogen steder — forskeren bruger tiden på projektet.',
   });
 
   // --- money ---
@@ -463,129 +480,6 @@ export function solve(scenario: Scenario): FrikoebResult {
     });
   }
 
-  // --- cost stack, when a pricing policy was supplied -----------------------
-  let price: PriceBreakdown | null = null;
-  if (scenario.pricing) {
-    const operatingKr = scenario.operatingKr ?? 0;
-    price = computePrice({ salaryKr: moneyKr, operatingKr }, scenario.pricing);
-
-    // Warnings from the cost stack are the consultant's, not the engine's — pass
-    // them straight through rather than reinterpreting them.
-    for (const w of price.warnings) warnings.push({ code: w.code, severity: w.severity, message: w.message });
-
-    if (operatingKr > 0) t.input('input.drift', 'Direkte driftsomkostninger', kr(operatingKr));
-
-    const ohBaseLabel =
-      price.overhead.base === 'direct_salary' ? 'direkte løn' : 'alle direkte omkostninger';
-    t.step({
-      id: 'oekonomi.overhead',
-      kind: 'derived',
-      label: `Overhead — ${price.overhead.label}`,
-      formula: `${ohBaseLabel} × ${daLoose(price.overhead.rate * 100)}%`,
-      substituted:
-        price.overhead.mode === 'markup'
-          ? `${da(price.overhead.base === 'direct_salary' ? moneyKr : price.directTotalKr)} kr × ${daLoose(price.overhead.rate)}`
-          : 'ingen yderligere overhead',
-      inputs: [{ label: 'Direkte løn', value: kr(moneyKr), ref: 'oekonomi.beloeb' }],
-      output: kr(price.overheadKr),
-      sourceRef: price.overhead.source,
-      note: price.overhead.note,
-    });
-
-    if (price.margin) {
-      t.step({
-        id: 'oekonomi.overskudsgrad',
-        kind: 'derived',
-        label: `Overskudsgrad — ${price.margin.label}`,
-        formula: `${price.margin.base === 'total_costs' ? 'samlede omkostninger' : 'direkte omkostninger'} × ${daLoose(price.margin.rate * 100)}%`,
-        inputs: [{ label: 'Omkostninger i alt', value: kr(price.totalCostsKr), ref: 'oekonomi.overhead' }],
-        output: kr(price.marginKr),
-        sourceRef: price.margin.source,
-        note: price.margin.note,
-      });
-    }
-
-    if (price.momsKr > 0) {
-      t.step({
-        id: 'oekonomi.moms',
-        kind: 'derived',
-        label: 'Moms',
-        formula: 'subtotal × 25%',
-        inputs: [{ label: 'Subtotal ekskl. moms', value: kr(price.subtotalExMomsKr) }],
-        output: kr(price.momsKr),
-      });
-    }
-
-    t.step({
-      id: 'oekonomi.total',
-      kind: 'derived',
-      label: price.headlineLabel,
-      inputs: [
-        { label: 'Direkte omkostninger', value: kr(price.directTotalKr) },
-        { label: 'Overhead', value: kr(price.overheadKr), ref: 'oekonomi.overhead' },
-      ],
-      output: kr(price.headlineKr),
-    });
-
-    // --- market floor: "AU må ikke underbyde markedet" ---
-    if (scenario.marketFloorTableId) {
-      t.section('kontrol');
-      const table = selectRateTable(scenario.marketFloorTableId);
-      const rateCat = rateCategoryFor(scenario.category);
-
-      if (rateCat === null) {
-        warnings.push({
-          code: 'NO_GUIDING_RATE_FOR_CATEGORY',
-          severity: 'info',
-          message:
-            `Der er ingen vejledende timetakst for ${categoryNorm.label}. ` +
-            'Markedsprøven er ikke udført.',
-        });
-      } else {
-        if (isStale(table, scenario.asOf)) {
-          warnings.push({
-            code: 'RATE_TABLE_STALE',
-            severity: 'warn',
-            message:
-              `Timetaksterne er fra ${table.effectiveFrom} og er sandsynligvis forældede. ` +
-              'Bekræft de aktuelle satser hos Arts Økonomi før tilbudsgivelse.',
-          });
-        }
-        const floorRate = guidingRate(table.id, rateCat);
-
-        // ⚠️ The billable basis is NOT the workload norm.
-        //
-        // h.workHours comes from the 1650 årsnorm, which governs Vipomatic
-        // registration. What may be charged to a funder is the PRODUCTIVE-hours
-        // basis — 1485 for ARTS (TECH 1460, others 1580). Dividing by 1650 here
-        // understates the effective hourly price by ~11% and produces spurious
-        // market-floor failures. See CLAUDE.md rule 4.
-        const billableHours = (months * ARTS_PRODUCTIVE_ANNUAL_HOURS) / 12;
-        const effectiveRate = billableHours > 0 ? price.subtotalExMomsKr / billableHours : 0;
-        const floor = checkMarketFloor(price.subtotalExMomsKr, billableHours, floorRate);
-
-        t.step({
-          id: 'kontrol.markedsproeve',
-          kind: 'check',
-          label: 'Markedsprøve — effektiv timepris',
-          formula: 'subtotal ekskl. moms ÷ fakturerbare timer',
-          substituted: `${da(price.subtotalExMomsKr)} kr ÷ ${daLoose(roundTo(billableHours, 1, 'halfUp'))} t`,
-          inputs: [
-            { label: 'Fakturerbare timer', value: hoursVal(billableHours) },
-            { label: 'Måneder', value: monthsVal(months) },
-          ],
-          output: { value: effectiveRate, unit: 'kr/t', dp: 0 },
-          sourceRef: table.source,
-          note:
-            `Beregnet på ARTS' produktive timenorm (${ARTS_PRODUCTIVE_ANNUAL_HOURS} t/år) — ` +
-            'ikke årsnormen, som kun styrer Vipomatic-registreringen. ' +
-            (floor ? floor.message : `Over den vejledende takst på ${floorRate} kr/t.`),
-        });
-        if (floor) warnings.push({ code: 'BELOW_MARKET_FLOOR', severity: floor.severity, message: floor.message });
-      }
-    }
-  }
-
   // --- residual obligation --------------------------------------------------
   // The IKK frikøbspolitik states this in all three of its examples, so it is
   // evidently what consultants actually need to know: what does the researcher
@@ -619,6 +513,52 @@ export function solve(scenario: Scenario): FrikoebResult {
     note: 'Forskeren skal fortsat yde instituttet disse timer i det pågældende semester.',
   });
 
+  // --- semester by semester ------------------------------------------------
+  // Each semester's hours are cut from the cumulative floored total —
+  // floor(H(slut)) − floor(H(start)) — so the slots always sum to exactly the
+  // Vipomatic figure, and no semester is credited more than was funded.
+  const SEMESTER_MONTHS = 6;
+  const semesters: SemesterSlot[] = [];
+  const wholeHoursAt = (m: number) => (m <= 0 ? 0 : hoursFromMonths(m, norm, share, profile).hoursToRegisterWhole);
+  // The epsilon keeps 12,0000000001 md from opening a third, empty semester.
+  const semesterCount = Math.ceil(months / SEMESTER_MONTHS - 1e-9);
+  for (let i = 0; i < semesterCount; i++) {
+    const start = i * SEMESTER_MONTHS;
+    const end = Math.min(months, start + SEMESTER_MONTHS);
+    const hoursThis = i === semesterCount - 1 && !timelineResult
+      ? h.hoursToRegisterWhole - wholeHoursAt(start)
+      : wholeHoursAt(end) - wholeHoursAt(start);
+    semesters.push({
+      index: i + 1,
+      months: end - start,
+      hours: hoursThis,
+      normHours: semesterNormHours,
+      remainingHours: Math.max(0, roundTo(semesterNormHours - hoursThis, 0, 'floor')),
+      fill: Math.min(1, (end - start) / SEMESTER_MONTHS),
+    });
+  }
+  if (semesters.length > 0) {
+    const full = semesters.filter((x) => x.fill >= 1);
+    const last = semesters[semesters.length - 1];
+    const partial = last.fill < 1 ? last : null;
+    t.step({
+      id: 'kontrol.semestre',
+      kind: 'derived',
+      label: 'Fordeling på semestre',
+      formula: 'fulde semestre à 6 md + evt. et delvist semester',
+      substituted:
+        `${full.length} × ${da(full[0]?.hours ?? semesterNormHours, 0)} t` +
+        (partial ? ` + ${da(partial.hours, 0)} t (${daLoose(partial.months)} md)` : ''),
+      inputs: [{ label: 'Måneder', value: monthsVal(months) }],
+      output: hoursVal(semesters.reduce((sum, x) => sum + x.hours, 0), 0),
+      note:
+        'Antager at frikøbet starter ved et semesterstart.' +
+        (partial
+          ? ` I det sidste semester skal forskeren fortsat yde ${da(partial.remainingHours, 0)} t.`
+          : ''),
+    });
+  }
+
   t.bind('months', monthsSourceStepId);
   t.bind('hours.workHours', 'vipomatic.arbejdstimer');
   t.bind('hours.workDays', 'vipomatic.arbejdstimer');
@@ -632,8 +572,8 @@ export function solve(scenario: Scenario): FrikoebResult {
     monthsSnapped,
     hours: h,
     moneyKr,
-    price,
     residual: { semesterNormHours, creditedThisSemesterHours, remainingObligationHours },
+    semesters,
     registeredShare: share,
     norm,
     timeline: timelineResult,

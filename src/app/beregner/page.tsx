@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScenarioForm } from './ScenarioForm';
 import { ResultSummary } from './ResultSummary';
-import { PriceSummary } from './PriceSummary';
 import { WarningList } from './WarningList';
 import { TracePanel } from './TracePanel';
+import { SemesterStrip } from './SemesterStrip';
 import {
   computeOutcome,
   formFromQueryString,
@@ -109,7 +109,7 @@ export default function BeregnerPage() {
           {outcome.result ? (
             <>
               <ResultSummary form={form} result={outcome.result} />
-              {outcome.result.price && <PriceSummary price={outcome.result.price} />}
+              <SemesterStrip semesters={outcome.result.semesters} />
               <WarningList warnings={outcome.result.warnings} />
               <TracePanel trace={outcome.result.trace} />
             </>

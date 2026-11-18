@@ -39,6 +39,7 @@ export function ResultSummary({ form, result }: { form: FormState; result: Friko
   const showFte = form.knownField === 'months' && form.monthsEntryMode === 'fte';
   const span = Number(form.varighedMonths);
   const ftePct = showFte && Number.isFinite(span) && span > 0 ? (result.months / span) * 100 : null;
+  const registeredPct = Math.round(result.registeredShare * 100);
 
   return (
     <div className={cardCls}>
@@ -60,14 +61,18 @@ export function ResultSummary({ form, result }: { form: FormState; result: Friko
             <p className={valueCls}>{da(result.moneyKr)} kr</p>
           </div>
         )}
+        <div>
+          <p className={labelCls}>Samlet arbejdstid</p>
+          <p className={valueCls}>{daLoose(result.hours.workHours)} t</p>
+        </div>
         {headlineField !== 'hoursRegistered' && (
           <div>
-            <p className={labelCls}>Vipomatic-timer</p>
+            <p className={labelCls}>Vipomatic-timer ({registeredPct}%)</p>
             <p className={valueCls}>{da(result.hours.hoursToRegisterWhole, 0)} t</p>
           </div>
         )}
         <div>
-          <p className={labelCls}>Forskningstid (registreres ikke)</p>
+          <p className={labelCls}>Forskningstid ({100 - registeredPct}%, registreres ikke)</p>
           <p className={valueCls}>{daLoose(result.hours.researchHours)} t</p>
         </div>
         {ftePct !== null && (
@@ -76,28 +81,7 @@ export function ResultSummary({ form, result }: { form: FormState; result: Friko
             <p className={valueCls}>{daLoose(ftePct)}%</p>
           </div>
         )}
-        <div>
-          <p className={labelCls}>Restforpligtelse i semestret</p>
-          <p className={valueCls}>
-            {da(result.residual.remainingObligationHours, 0)} t af {da(result.residual.semesterNormHours, 0)} t
-          </p>
-        </div>
       </div>
-
-      <details className="group mt-4 rounded-md border border-zinc-200 dark:border-zinc-800">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-medium text-zinc-600 marker:content-none dark:text-zinc-400">
-          Arbejdsdage
-          <span
-            aria-hidden="true"
-            className="text-zinc-400 transition-transform group-open:rotate-180 dark:text-zinc-500"
-          >
-            ▾
-          </span>
-        </summary>
-        <p className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-          Svarer til {da(result.hours.workDays, 0)} hele arbejdsdage (7,24 t/dag, Vipomatic-norm).
-        </p>
-      </details>
 
       {result.monthsSnapped !== null && (
         <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">

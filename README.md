@@ -13,17 +13,16 @@ administrator can paste into a project budget and defend to a funder.
   already knows.
 - Renders a full derivation trace: every intermediate value, the formula that produced it, and a
   citation to the source document and clause it comes from.
-- Handles part-time employment fractions, teaching-only buy-outs (priced differently from full
-  buy-outs), and date-versioned constants — the underlying norms changed in 2024, so a scenario
+- Handles part-time employment fractions and date-versioned constants — the underlying norms changed in 2024, so a scenario
   dated before that uses the old figures automatically.
 - Reproduces the rounding behavior of the paper-era source documents exactly, including their
   particular rounding *direction* (always in the institution's favor), even though the internal
   math is done unrounded until the point of display.
 - Segments multi-year projects into one row per calendar year, compounding budget indexation
   correctly across year boundaries instead of treating the whole project as a single flat period.
-- Optionally builds out the full cost stack on top of a scenario — overhead, profit margin, moms,
-  and a market-floor check — for the mechanisms (IDV, tilskudsfinansieret, samfinansieret) that
-  actually require it; off by default, since most frikøb calculations don't need it.
+- Offers one frikøb type, "Frikøb Standard" (full cost price), and can start from total working
+  time, showing the 60% registered in Vipomatic and the 40% research time registered nowhere.
+- Shows the buy-out semester by semester, with the credit each semester earns.
 - Computes the separate PI teaching-credit a senior researcher can claim for postdoc positions
   they've brought in funding for (Princip 6) — a distinct calculation from a personal frikøb, since
   it reduces the grant-winner's own obligation, not the postdoc's.
@@ -66,14 +65,14 @@ Postgres (Neon, EU region) · Vitest + fast-check for testing · deployed on Ver
 
 ## Testing
 
-169 tests covering the calculation core: golden fixtures reproducing every worked example from the
+151 tests covering the calculation core: golden fixtures reproducing every worked example from the
 source documents exactly, solver round-trip properties, part-time scaling against hand
 calculations, multi-year indexation/segmentation, the PI teaching-credit calculation, and
 guardrails that make invalid states (an unspecified teaching share, a beyond-range employment
 fraction) throw instead of silently defaulting.
 
 ```bash
-npm test          # vitest, 169 tests
+npm test          # vitest, 151 tests
 npm run lint        # eslint
 npm run typecheck    # tsc --noEmit
 ```
@@ -105,8 +104,8 @@ npx tsx scripts/create-user.ts <username> <name> <password>
 ## Source documents
 
 Every constant in `src/lib/frikoeb/config/` cites the Aarhus University document it comes from
-(working-time agreement, institute frikøb notes and policy, cost-price rate catalogues, IDV overhead
-rates, salary agreement). **Those documents are not included in this repository.** They are AU's
+(working-time agreement, institute frikøb notes and policy, cost-price rate catalogues, salary
+agreement). **Those documents are not included in this repository.** They are AU's
 material, several come from staff-only pages, and some name individual staff. The topic analyses
 derived from them are in `rules/NOTES-*.md`.
 
@@ -119,8 +118,8 @@ locations are git-ignored for PDFs/spreadsheets. Without them, the calculator wo
 
 Built for the research consultants at the Faculty of Arts, Aarhus University, as part of my job there. This repo is a portfolio copy, so the development history isn't visible.
 
-**My part:** I researched the domain (AU's working-time agreement, buy-out policy, rate catalogues and overhead rules) and wrote the rules down in `rules/NOTES-*.md`. Before building, I sent open questions to the consultants for confirmation (`docs/open-questions.md`). I defined the requirements and product decisions, directed the work, reviewed the code and verified the results. After deployment I ran six rounds of feedback with the consultants.
+**My part:** I researched the domain (AU's working-time agreement, buy-out policy, rate catalogues and related rules) and wrote the rules down in `rules/NOTES-*.md`. Before building, I sent open questions to the consultants for confirmation (`docs/open-questions.md`). I defined the requirements and product decisions, directed the work, reviewed the code and verified the results. After deployment I ran six rounds of feedback with the consultants.
 
 **AI's part:** Most of the code was written with Claude Code, using `CLAUDE.md` and the rule notes as context.
 
-**Verification:** 169 tests, including golden fixtures that reproduce every worked example in the source documents, property-based round-trip tests, and guardrails that throw on invalid states.
+**Verification:** 151 tests, including golden fixtures that reproduce every worked example in the source documents, property-based round-trip tests, and guardrails that throw on invalid states.

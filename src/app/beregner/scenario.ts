@@ -18,16 +18,12 @@
 import {
   solve,
   selectCategoryNorm,
-  DEFAULT_UNDERVISNINGS_BASIS,
   type EmploymentCategory,
-  type FrikoebVariant,
-  type UndervisningsBasis,
-  type FundingMechanism,
   type Scenario,
   type FrikoebResult,
 } from '@/lib/frikoeb';
 
-export type KnownField = 'moneyKr' | 'months' | 'hoursRegistered';
+export type KnownField = 'moneyKr' | 'months' | 'workHours' | 'hoursRegistered';
 
 /** Standard Danish full-time work week — the reference for Beskæftigelsesgrad. */
 export const FULL_TIME_WEEKLY_HOURS = 37;
@@ -35,14 +31,14 @@ export const FULL_TIME_WEEKLY_HOURS = 37;
 export interface FormState {
   asOf: string;
   category: EmploymentCategory;
-  variant: FrikoebVariant;
-  undervisningsBasis: UndervisningsBasis;
   monthlyCostKr: string;
   /** Percent, e.g. "20". Only used when the category has no fixed norm. */
   registeredShareOverride: string;
   /** The one quantity the consultant already has a number for. */
   knownField: KnownField;
   moneyKr: string;
+  /** Total arbejdstid — research and teaching together. */
+  workHours: string;
   hoursRegistered: string;
   /** Only used when `knownField === 'months'`. */
   months: string;
@@ -55,34 +51,16 @@ export interface FormState {
   beskaeftigelsesgrad: string;
   /** E.g. "30" for a 30-timers uge. Only used when entry mode is 'weeklyHours'. */
   weeklyHours: string;
-  /**
-   * Off by default — a plain frikøb calculation ("how many months does this
-   * grant buy") already treats the funder's beløb as the salary cost. Turn on
-   * only when the beløb itself needs to be derived through overhead/margin/moms
-   * — e.g. quoting an IDV price to a company.
-   */
-  pricingEnabled: boolean;
-  mechanism: FundingMechanism;
-  /** Id from OVERHEAD_POLICIES. */
-  overheadId: string;
-  /** Id from MARGIN_POLICIES, or '' for none. */
-  marginId: string;
-  applyMoms: boolean;
-  /** Travel, materials, publication. Kr, digits only like other Kr fields. */
-  operatingKr: string;
-  /** Id from RATE_TABLES, or '' to skip the market-floor check. */
-  marketFloorTableId: string;
 }
 
 export const DEFAULT_FORM: FormState = {
   asOf: new Date().toISOString().slice(0, 10),
   category: 'lektor',
-  variant: 'undervisning',
-  undervisningsBasis: DEFAULT_UNDERVISNINGS_BASIS,
   monthlyCostKr: '70000',
   registeredShareOverride: '',
   knownField: 'moneyKr',
   moneyKr: '210000',
+  workHours: '',
   hoursRegistered: '',
   months: '',
   monthsEntryMode: 'months',
@@ -92,25 +70,17 @@ export const DEFAULT_FORM: FormState = {
   beskaeftigelsesgradEntryMode: 'percent',
   beskaeftigelsesgrad: '100',
   weeklyHours: String(FULL_TIME_WEEKLY_HOURS),
-  pricingEnabled: false,
-  mechanism: 'tilskudsfinansieret',
-  overheadId: 'tilskud-44',
-  marginId: '',
-  applyMoms: false,
-  operatingKr: '',
-  marketFloorTableId: '',
 };
 
 /** Short keys keep the shareable link tidy. */
 const QUERY_KEYS = {
   asOf: 'd',
   category: 'cat',
-  variant: 'v',
-  undervisningsBasis: 'ub',
   monthlyCostKr: 'kp',
   registeredShareOverride: 'so',
   knownField: 'kf',
   moneyKr: 'm',
+  workHours: 'w',
   hoursRegistered: 'h',
   months: 'md',
   monthsEntryMode: 'me',
@@ -120,13 +90,6 @@ const QUERY_KEYS = {
   beskaeftigelsesgradEntryMode: 'bgm',
   beskaeftigelsesgrad: 'bg',
   weeklyHours: 'wh',
-  pricingEnabled: 'pe',
-  mechanism: 'mech',
-  overheadId: 'oh',
-  marginId: 'mg',
-  applyMoms: 'moms',
-  operatingKr: 'op',
-  marketFloorTableId: 'mft',
 } as const;
 
 /** Serializes only the fields relevant to the current mode — no dead params. */
@@ -136,14 +99,14 @@ export function formToQueryString(form: FormState): string {
 
   p.set(k.asOf, form.asOf);
   p.set(k.category, form.category);
-  p.set(k.variant, form.variant);
-  if (form.variant === 'undervisning') p.set(k.undervisningsBasis, form.undervisningsBasis);
   p.set(k.monthlyCostKr, form.monthlyCostKr);
   if (form.registeredShareOverride) p.set(k.registeredShareOverride, form.registeredShareOverride);
   p.set(k.knownField, form.knownField);
 
   if (form.knownField === 'moneyKr') {
     p.set(k.moneyKr, form.moneyKr);
+  } else if (form.knownField === 'workHours') {
+    p.set(k.workHours, form.workHours);
   } else if (form.knownField === 'hoursRegistered') {
     p.set(k.hoursRegistered, form.hoursRegistered);
   } else {
@@ -163,16 +126,6 @@ export function formToQueryString(form: FormState): string {
   } else if (form.beskaeftigelsesgrad !== DEFAULT_FORM.beskaeftigelsesgrad) {
     p.set(k.beskaeftigelsesgrad, form.beskaeftigelsesgrad);
   }
-
-  if (form.pricingEnabled) {
-    p.set(k.pricingEnabled, '1');
-    p.set(k.mechanism, form.mechanism);
-    p.set(k.overheadId, form.overheadId);
-    if (form.marginId) p.set(k.marginId, form.marginId);
-    if (form.applyMoms) p.set(k.applyMoms, '1');
-    if (form.operatingKr) p.set(k.operatingKr, form.operatingKr);
-    if (form.marketFloorTableId) p.set(k.marketFloorTableId, form.marketFloorTableId);
-  }
   return p.toString();
 }
 
@@ -187,12 +140,11 @@ export function formFromQueryString(queryString: string): FormState {
   return {
     asOf: str(k.asOf, DEFAULT_FORM.asOf),
     category: str(k.category, DEFAULT_FORM.category) as EmploymentCategory,
-    variant: str(k.variant, DEFAULT_FORM.variant) as FrikoebVariant,
-    undervisningsBasis: str(k.undervisningsBasis, DEFAULT_FORM.undervisningsBasis) as UndervisningsBasis,
     monthlyCostKr: str(k.monthlyCostKr, DEFAULT_FORM.monthlyCostKr),
     registeredShareOverride: str(k.registeredShareOverride, DEFAULT_FORM.registeredShareOverride),
     knownField: str(k.knownField, DEFAULT_FORM.knownField) as KnownField,
     moneyKr: str(k.moneyKr, DEFAULT_FORM.moneyKr),
+    workHours: str(k.workHours, DEFAULT_FORM.workHours),
     hoursRegistered: str(k.hoursRegistered, DEFAULT_FORM.hoursRegistered),
     months: str(k.months, DEFAULT_FORM.months),
     monthsEntryMode: str(k.monthsEntryMode, DEFAULT_FORM.monthsEntryMode) as FormState['monthsEntryMode'],
@@ -205,13 +157,6 @@ export function formFromQueryString(queryString: string): FormState {
     ) as FormState['beskaeftigelsesgradEntryMode'],
     beskaeftigelsesgrad: str(k.beskaeftigelsesgrad, DEFAULT_FORM.beskaeftigelsesgrad),
     weeklyHours: str(k.weeklyHours, DEFAULT_FORM.weeklyHours),
-    pricingEnabled: p.get(k.pricingEnabled) === '1',
-    mechanism: str(k.mechanism, DEFAULT_FORM.mechanism) as FundingMechanism,
-    overheadId: str(k.overheadId, DEFAULT_FORM.overheadId),
-    marginId: str(k.marginId, DEFAULT_FORM.marginId),
-    applyMoms: p.get(k.applyMoms) === '1',
-    operatingKr: str(k.operatingKr, DEFAULT_FORM.operatingKr),
-    marketFloorTableId: str(k.marketFloorTableId, DEFAULT_FORM.marketFloorTableId),
   };
 }
 
@@ -259,6 +204,10 @@ export function computeOutcome(form: FormState): Outcome {
     const v = toNumber(form.moneyKr);
     if (v === null || v < 0) return { error: 'Angiv et gyldigt beløb.' };
     given.moneyKr = v;
+  } else if (form.knownField === 'workHours') {
+    const v = toNumber(form.workHours);
+    if (v === null || v < 0) return { error: 'Angiv en gyldig samlet arbejdstid i timer.' };
+    given.workHours = v;
   } else if (form.knownField === 'hoursRegistered') {
     const v = toNumber(form.hoursRegistered);
     if (v === null || v < 0) return { error: 'Angiv et gyldigt antal Vipomatic-timer.' };
@@ -279,17 +228,12 @@ export function computeOutcome(form: FormState): Outcome {
     given.months = monthsValue;
   }
 
-  let operatingKr: number | undefined;
-  if (form.pricingEnabled) {
-    operatingKr = toNumber(form.operatingKr) ?? 0;
-    if (operatingKr < 0) return { error: 'Angiv gyldige direkte driftsomkostninger (0 eller derover).' };
-  }
-
   const scenario: Scenario = {
     asOf: form.asOf,
     category: form.category,
-    variant: form.variant,
-    undervisningsBasis: form.variant === 'undervisning' ? form.undervisningsBasis : undefined,
+    // Frikøb Standard: full kostpris, 60% registered in Vipomatic, 40% research
+    // registered nowhere. The only variant offered (user decision 2026-10-27).
+    variant: 'fuldt',
     monthlyCostKr,
     registeredShareOverride,
     // When months is the known field, either 'money' or 'hoursRegistered'
@@ -299,17 +243,6 @@ export function computeOutcome(form: FormState): Outcome {
     given,
     snapToWholeMonths: form.snapToWholeMonths ? 'down' : 'off',
     employmentFraction: beskaeftigelsesgradPct / 100,
-    pricing: form.pricingEnabled
-      ? {
-          mechanism: form.mechanism,
-          asOf: form.asOf,
-          overheadId: form.overheadId,
-          marginId: form.marginId || undefined,
-          applyMoms: form.applyMoms,
-        }
-      : undefined,
-    operatingKr,
-    marketFloorTableId: form.pricingEnabled && form.marketFloorTableId ? form.marketFloorTableId : undefined,
   };
 
   try {
